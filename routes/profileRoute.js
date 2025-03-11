@@ -3,7 +3,7 @@ import Profile from "../models/Auth/profile.js";
 import express from "express";
 import jwt from "jsonwebtoken"
 import {verifyToken} from "../middleware/verifyToken.js"
-
+import cloudinary from "cloudinary"
 const profileRoute = express.Router()
 
 profileRoute.post("/create",  async(req, res) => {
@@ -53,54 +53,71 @@ profileRoute.post("/create",  async(req, res) => {
 }
 })
 
-profileRoute.get("/getprofile", verifyToken, async(req, res) => {
-    const id = req.user.id
+
+
+profileRoute.get("/getprofile", verifyToken, async (req, res) => {
     try {
-        const user = await User.findOne({id})
+     
+      const userId = req.user.id || req.user._id; 
+      if (!userId) {
+        return res.status(400).json({
+          status: false,
+          message: "User ID not found in token payload",
+        });
+      }
+  
+      const user = await User.findOne({ _id: userId }); 
+      if (!user) {
+        return res.status(404).json({
+          status: false,
+          message: "User account not found",
+        });
+      }
+  
 
-        if(!user){
-            return res.status(404).json({
-                status: false,
-                message: "user accound not found"
-            })
-        }
-
-
-        const myuserId = user._id
-
-        const profile = await Profile.findOne({userId: myuserId})
-        if(!profile) {
-            return res.status(404).json({
-                status: false,
-                message: "profile data not found"
-            })
-        }
-
-        
-        return res.status(200).json({
-            status: true,
-            message: "successfully retrieved",
-            profile
-        })
-
-
+      const profile = await Profile.findOne({ userId: user._id }).populate("userId", "firstName lastName phone email role");
+      if (!profile) {
+        return res.status(404).json({
+          status: false,
+          message: "Profile data not found",
+        });
+      }
+  
+      return res.status(200).json({
+        status: true,
+        message: "Successfully retrieved",
+        profile, 
+      });
     } catch (error) {
-        console.log(error)
+      console.error("Error in getProfile:", error);
+
+      if (error.name === "CastError") {
+        return res.status(400).json({
+          status: false,
+          message: "Invalid user ID format",
+        });
+      } else if (error.name === "ValidationError") {
+        return res.status(400).json({
+          status: false,
+          message: "Validation error in query",
+        });
+      } else {
         return res.status(500).json({
-            status: false,
-            message: "an error occurred from the server"
-        })
+          status: false,
+          message: "An error occurred on the server",
+        });
+      }
     }
-})
+  });
 
 
-profileRoute.put("/update", async(req, res) => {
-  const  {userId, email, phone, address,  WDYD, profilePicture} = req.body
+profileRoute.put("/update", verifyToken, async(req, res) => {
+  const  {userId,  phone, address,  WDYD, profilePicture} = req.body
 
     try {
         const user = await User.findByIdAndUpdate(
             userId,
-            {phone, email, profilePicture},
+            {phone,  profilePicture},
             {new: true}
         )
 
@@ -119,62 +136,84 @@ profileRoute.put("/update", async(req, res) => {
 })
 
 
-// router.put(
-//     "/update",
-//     authMiddleware, // Ensure authenticated user
-//     upload.single("profilePicture"), // 'profilePicture' matches the form field name
-//     async (req, res) => {
-//       const { userId, email, phone, address, WDYD } = req.body;
-//       const profilePicture = req.file ? `/uploads/${req.file.filename}` : undefined; // Path if file uploaded
-  
-//       try {
-//         // Authorization check
-//         const currentUser = req.user; // From authMiddleware (decoded token)
-//         if (!currentUser || currentUser.id !== userId) {
-//           return res.status(403).json({ status: false, message: "Unauthorized" });
-//         }
-  
-//         // Validate input
-//         if (!email || !phone || !address || !WDYD) {
-//           return res.status(400).json({ status: false, message: "All fields are required" });
-//         }
-  
-//         // Update User
-//         const user = await User.findByIdAndUpdate(
-//           userId,
-//           { email, phone, profilePicture }, // Only update profilePicture if provided
-//           { new: true, runValidators: true }
-//         );
-//         if (!user) {
-//           return res.status(404).json({ status: false, message: "User not found" });
-//         }
-  
-//         // Update Profile
-//         const profile = await Profile.findOneAndUpdate(
-//           { userId },
-//           { address, WDYD },
-//           { new: true, runValidators: true }
-//         ).populate("userId", "firstName lastName email");
-//         if (!profile) {
-//           return res.status(404).json({ status: false, message: "Profile not found" });
-//         }
-  
-//         return res.status(200).json({
-//           status: true,
-//           data: profile,
-//         });
-//       } catch (error) {
-//         console.error("Update error:", error);
-//         if (req.file) {
-//           // Clean up uploaded file on error
-//           const fs = require("fs");
-//           fs.unlink(path.join(__dirname, "../uploads", req.file.filename), (err) => {
-//             if (err) console.error("File cleanup error:", err);
-//           });
-//         }
-//         res.status(500).json({ status: false, message: "An error occurred on the server" });
-//       }
-//     }
-// )
+//upload ur picture
+profileRoute.put("/:id", verifyToken, async(req, res) => {
+    const { id } = req.params;
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            console.log("User account not found");
+            return res.status(404).json({ message: "User account not found" });
+        }
+
+        const profile = await Profile.findOne({ userId: user._id })
+        if(!profile){
+            return res.status(404).json({
+                status: false,
+                message: "Profile data not found",
+              });
+        }
+
+        const profileData = await Profile.findById(id)
+        if(!profileData){
+            console.log("profile not found")
+            return res.status(404).json({message: "data not found"})
+        }
+
+        if(profileData.userId.toString() !== req.user.id){
+            console.log("Unauthorized: User does not own this profile");
+            return res.status(403).json({ message: "Not authorized to update this profile" });
+        }
+
+        const updates = {};
+        for (const key in req.body) {
+            if (req.body[key] !== undefined && req.body[key] !== "") {
+                updates[key] = req.body[key];
+            }
+        }
+
+        
+        const uploadFile = async (file) => {
+            try {
+                const result = await cloudinary.uploader.upload(file.tempFilePath, {
+                    folder: "schools",
+                });
+                return result.secure_url;
+            } catch (error) {
+                console.error("Cloudinary upload error:", error);
+                throw new Error("File upload failed");
+            }
+        };
+
+        if (req.files) {
+            const fileKeys = [
+                "profilePicture", 
+            ];
+
+            for (let key of fileKeys) {
+                if (req.files[key]) {
+                    updates[key] = await uploadFile(req.files[key]);
+                    console.log(`Uploaded ${key}:`, updates[key]);
+                }
+            }
+        }
+
+        const updatedProfile = await Profile.findByIdAndUpdate(
+            id,
+            { $set: updates }, 
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedProfile) {
+            console.log("Failed to update store");
+            return res.status(500).json({ message: "Failed to update store." });
+        }
+
+        console.log("Store updated successfully:", updatedStore);
+        res.status(200).json(updatedStore);
+    } catch (error) {
+        
+    }
+})
 
 export default profileRoute

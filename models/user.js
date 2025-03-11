@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
 
 userSchema.pre("save", function(next){
     if(!this.slug){
-      this.slug = slugify(this.firstName, { lower: true, strict: true });
+      this.slug = slugify(this.email, { lower: true, strict: true });
     }
     next();
   })
