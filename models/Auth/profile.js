@@ -13,6 +13,8 @@ const profileSchema = new mongoose.Schema({
         unique: true,
         trim: true,
     },
+
+
     age: {
         type:String,
         required: true
