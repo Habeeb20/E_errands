@@ -10,6 +10,21 @@ import cloudinary from "cloudinary"
 import Profile from "../models/Auth/profile.js";
 import multer from "multer";
 import bcryptjs from "bcrypt"
+import { verifyToken } from "../middleware/verifyToken.js";
+
+
+
+const isAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  if (req.user.role?.toLowerCase() !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Admins only.' });
+  }
+  next();
+};
+
+
 
 
 dotenv.config()
@@ -70,7 +85,7 @@ const sendOTPEmail = async (email, otp, firstName) => {
                     If you have any questions, feel free to reach out to us. We’re here to help you get started with E_Ride!
                   </p>
                   <div style="text-align: center; margin-top: 30px;">
-                    <a href="http://localhost:5173/verifyemail?email=${encodeURIComponent(
+                    <a href=http://localhost:5173/verifyemail?email=${encodeURIComponent(
                       email
                     )}" 
                        style="display: inline-block; padding: 12px 30px; background-color: #7E2E; color: white; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px; font-family: 'Helvetica', sans-serif; transition: background-color 0.3s;">
@@ -183,6 +198,10 @@ userRoute.post("/login", async(req, res) => {
         case "errander":
           roleMessage = "Welcome,  You have full access to the system as errander account.";
           break;
+
+        case "admin":
+          roleMessage = "welcome, you have full access to all th activities";
+          break;
       
         case "user":
         default:
@@ -286,5 +305,154 @@ userRoute.post("/verify-email", async(req, res) => {
     }
 })
 
+userRoute.get("/adminDashboard", verifyToken, isAdmin, async(req, res) => {
+  const userId = req.user?.id || req.user?._id; 
 
+  if (!userId) {
+    console.log("No user ID provided in request");
+    return res.status(401).json({
+      status: false,
+      message: "Unauthorized: No user ID provided",
+    });
+  }
+
+  try {
+  
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      console.log("User not found for ID:", userId);
+      return res.status(404).json({
+        status: false,
+        message: "Not authorized: User not found",
+      });
+    }
+  
+    return res.status(200).json({
+      status: true,
+      data: user,
+    });
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "An error occurred",
+      error: error.message, 
+    });
+  }
+})
+
+
+// Verify an errander
+userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    await user.verifyErrander();
+    res.status(200).json({ message: "Errander verified successfully", user });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+
+userRoute.get("/erranders",   async (req, res) => {
+  try {
+    const users = await User.find({ role: "errander" });
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No erranders found",
+      });
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "Erranders retrieved successfully",
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error fetching erranders:", error); // Improved logging
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: error.message, // Include error message for debugging (optional)
+    });
+  }
+});
+
+
+userRoute.put("/blacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    await user.blacklistErrander();
+    res.status(200).json({ message: "Errander blacklisted successfully", user });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+
+userRoute.put("/unblacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    await user.unblacklistErrander();
+    res.status(200).json({ message: "Errander unblacklisted successfully", user });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+
+
+userRoute.put("/feature-errander/:id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    await user.featureErrander();
+    res.status(200).json({ message: "Errander featured successfully", user });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+
+userRoute.put("/unfeature-errander/:id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    await user.unfeatureErrander();
+    res.status(200).json({ message: "Errander unfeatured successfully", user });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+
+
+userRoute.get("/featured-erranders", async (req, res) => {
+  try {
+    const featuredErranders = await User.find({
+      role: "errander",
+      isFeatured: true,
+      isBlacklisted: false, 
+      verificationStatus: "verified", 
+    });
+    res.status(200).json(featuredErranders);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 export default userRoute
