@@ -91,7 +91,7 @@ comments: [
 }, {timestamps: true})
 profileSchema.pre("save", function(next){
     if(!this.slug){
-        this.slug=slugify(this.referenceAddress, { lower: true, strict: true })
+        this.slug=slugify(this.userEmail, { lower: true, strict: true })
     }
     next()
 })
