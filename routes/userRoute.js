@@ -357,7 +357,7 @@ userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => 
 });
 
 
-userRoute.get("/erranders",   async (req, res) => {
+userRoute.get("/erranders", async (req, res) => {
   try {
     const users = await User.find({ role: "errander" });
 
@@ -365,23 +365,39 @@ userRoute.get("/erranders",   async (req, res) => {
       return res.status(404).json({
         status: false,
         message: "No erranders found",
+        data: null,
+      });
+    }
+
+    const userIds = users.map(user => user._id);
+    const profiles = await Profile.find({ userId: { $in: userIds } })
+        .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber');
+
+    if (profiles.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No profiles found",
+        data: null,
       });
     }
 
     res.status(200).json({
       status: true,
       message: "Erranders retrieved successfully",
-      data: users,
+      data: profiles,
     });
   } catch (error) {
-    console.error("Error fetching erranders:", error); // Improved logging
+    console.error("Error fetching erranders:", error.stack);
     res.status(500).json({
       status: false,
-      message: "Server error",
-      error: error.message, // Include error message for debugging (optional)
+      message: process.env.NODE_ENV === "production" ? "Internal server error" : error.message,
+      data: null,
     });
   }
 });
+
+
+
 
 
 userRoute.put("/blacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {

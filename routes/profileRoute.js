@@ -4,6 +4,7 @@ import express from "express";
 import jwt from "jsonwebtoken"
 import {verifyToken} from "../middleware/verifyToken.js"
 import cloudinary from "cloudinary"
+
 const profileRoute = express.Router()
 
 profileRoute.post("/create",  async(req, res) => {
@@ -216,4 +217,159 @@ profileRoute.put("/:id", verifyToken, async(req, res) => {
     }
 })
 
+
+
+
+profileRoute.get("/:slug/shares", async(req, res) => {
+  try {
+    const {slug} = req.params
+    const profile = await Profile.findOne({slug});
+    if(!profile){
+      return res.status(404).json({message: "profile not found"})
+    }
+    res.status(200).json({shareCount:profile.shares})
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+})
+
+
+///increment shares
+profileRoute.post("/:slug/shares", async(req, res) => {
+  try {
+    const {slug} = req.params;
+    const profile =  await Profile.findOneAndUpdate(
+      {slug},
+      {$inc: {shares: 1}},
+      {new: true}
+    )
+    if(!profile){
+      return res.status(404).json({message: "profile not found"})
+    }
+
+    return res.status(200).json({
+      message: "shares count updated", shareCount: profile.shares
+    })
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+})
+
+///increment click
+profileRoute.post("/:slug/click", async(req, res) => {
+    try {
+      const {slug} = req.params;
+      const profile =await Profile.findOneAndUpdate(
+        {slug},
+        {$inc:{clicks: 1}},
+        {new: true}
+      )
+
+      if(!profile){
+        return res.status(404).json({
+          message: "profile not found"
+        })
+      }
+
+      return res.status(200).json({message: "clicks successfully updated"})
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Server error" });
+    }
+} )
+
+
+//get clicks
+profileRoute.get("/get-clicks/:slug", async(req, res) => {
+  try {
+    const {slug} = req.params
+
+    const profile = await Profile.findOne(slug)
+    if(!profile){
+      return res.status(404).json({message: "profile not found"})
+    }
+
+    res.status(200).json({clicks:profile.clicks})
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+})
+
+
+//get every clicks
+profileRoute.get("/get-clicks", async(req, res) => {
+   try {
+    const profile = await Profile.find({}, "profile clicks")
+
+    return res.status(200).json(profile)
+   } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+   }
+})
+
+
+
+
+profileRoute.get("/aprofile/:slug", async(req, res) => {
+  try {
+    const {slug} = req.params.slug;
+
+    const profile = await Profile.findOne(slug)
+        .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber');
+
+    if(!profile){
+      console.log("profile not found")
+      return res.status(404).json({
+        message: "profile not found"
+      })
+    }
+
+    return res.status(200).json({
+      message: "profile is available",
+      profile
+    })
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+})
+
+
+profileRoute.post("/:slug/comments", async(req, res) => {
+  const {name, text} = req.body;
+
+  if(!name || !text){
+    return res.status(400).json({message: "name and text are required"})
+
+  }
+
+  try {
+    const profile = await Profile.findOne({slug:req.body.slug})
+    if(!profile){
+      return res.status(404).json({
+        message: "profile is not found",
+        success: false
+      })
+    }
+
+    const  newComment = {name, text, createdAt: new Date()}
+    profile.comments.push(newComment)
+    await profile.save() 
+
+    res.status(201).json({
+      status:true,
+      profile,
+      message:"succcessfully commented"
+    })
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+})
 export default profileRoute
