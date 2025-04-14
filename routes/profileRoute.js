@@ -287,7 +287,7 @@ profileRoute.get("/get-clicks/:slug", async(req, res) => {
   try {
     const {slug} = req.params
 
-    const profile = await Profile.findOne(slug)
+    const profile = await Profile.findOne({slug})
     if(!profile){
       return res.status(404).json({message: "profile not found"})
     }
@@ -341,35 +341,87 @@ profileRoute.get("/aprofile/:slug", async(req, res) => {
 })
 
 
-profileRoute.post("/:slug/comments", async(req, res) => {
-  const {name, text} = req.body;
+profileRoute.post("/:slug/comments", async (req, res) => {
+  const { name, text } = req.body;
 
-  if(!name || !text){
-    return res.status(400).json({message: "name and text are required"})
 
+  if (!name || !text || name.trim() === "" || text.trim() === "") {
+    return res.status(400).json({
+      status: false,
+      message: "Name and text are required and cannot be empty",
+      data: null,
+    });
+  }
+
+  // 
+  if (name.trim().length > 50 || text.trim().length > 500) {
+    return res.status(400).json({
+      status: false,
+      message: "Name must be under 50 characters and text under 500 characters",
+      data: null,
+    });
   }
 
   try {
-    const profile = await Profile.findOne({slug:req.body.slug})
-    if(!profile){
+    // Use req.params.slug instead of req.body.slug
+    const profile = await Profile.findOne({ slug: req.params.slug });
+    if (!profile) {
       return res.status(404).json({
-        message: "profile is not found",
-        success: false
-      })
+        status: false,
+        message: "Profile not found",
+        data: null,
+      });
     }
 
-    const  newComment = {name, text, createdAt: new Date()}
-    profile.comments.push(newComment)
-    await profile.save() 
+    const newComment = {
+      name: name.trim(),
+      text: text.trim(),
+      createdAt: new Date(),
+    };
+    profile.comments.push(newComment);
+    await profile.save();
 
     res.status(201).json({
-      status:true,
-      profile,
-      message:"succcessfully commented"
-    })
+      status: true,
+      message: "Successfully commented",
+      data: { profile },
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error adding comment:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
-})
+});
+
+
+profileRoute.get("/:slug/comments", async (req, res) => {
+  try {
+   
+    const profile = await Profile.findOne({ slug: req.params.slug }).select('comments');
+    if (!profile) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found",
+        data: null,
+      });
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "Comments retrieved successfully",
+      data: profile.comments || [],
+    });
+  } catch (error) {
+    console.error("Error retrieving comments:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
+  }
+});
+
 export default profileRoute

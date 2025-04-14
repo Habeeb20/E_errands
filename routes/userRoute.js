@@ -345,18 +345,63 @@ userRoute.get("/adminDashboard", verifyToken, isAdmin, async(req, res) => {
 // Verify an errander
 userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
+    // Find the user by ID
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      console.log("user not found")
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+        data: null,
+      });
     }
-    await user.verifyErrander();
-    res.status(200).json({ message: "Errander verified successfully", user });
+
+    // Check if the user is an errander
+    if (user.role !== "errander") {
+      return res.status(400).json({
+        status: false,
+        message: "User is not an errander",
+        data: null,
+      });
+    }
+
+    // Check if already verified
+    if (user.verificationStatus === "verified") {
+      return res.status(400).json({
+        status: false,
+        message: "Errander is already verified",
+        data: null,
+      });
+    }
+
+    // Update verification status on the User model
+    user.verificationStatus = "verified";
+    await user.save();
+
+    // Find the corresponding Profile document
+    const profile = await Profile.findOne({ userId: req.params.id }).populate('userId');
+    if (!profile) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found for this user",
+        data: null,
+      });
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "Errander verified successfully",
+      data: profile, // Includes populated userId with updated verificationStatus
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Error verifying errander:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
 });
-
-
 userRoute.get("/erranders", async (req, res) => {
   try {
     const users = await User.find({ role: "errander" });
@@ -399,76 +444,273 @@ userRoute.get("/erranders", async (req, res) => {
 
 
 
-
+// Blacklist an errander
 userRoute.put("/blacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
+    // Find the user by ID
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+        data: null,
+      });
     }
-    await user.blacklistErrander();
-    res.status(200).json({ message: "Errander blacklisted successfully", user });
+
+    // Check if the user is an errander
+    if (user.role !== "errander") {
+      return res.status(400).json({
+        status: false,
+        message: "User is not an errander",
+        data: null,
+      });
+    }
+
+    // Find the corresponding Profile document
+    const profile = await Profile.findOne({ userId: req.params.id });
+    if (!profile) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found for this user",
+        data: null,
+      });
+    }
+
+    // Check if already blacklisted
+    if (profile.isBlacklisted) {
+      return res.status(400).json({
+        status: false,
+        message: "Errander is already blacklisted",
+        data: null,
+      });
+    }
+
+    // Update blacklist status
+    profile.isBlacklisted = true;
+    await profile.save();
+
+    // Populate userId for the response
+    const updatedProfile = await Profile.findOne({ userId: req.params.id }).populate('userId');
+
+    res.status(200).json({
+      status: true,
+      message: "Errander blacklisted successfully",
+      data: updatedProfile,
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Error blacklisting errander:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
 });
 
-
+// Unblacklist an errander
 userRoute.put("/unblacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+        data: null,
+      });
     }
-    await user.unblacklistErrander();
-    res.status(200).json({ message: "Errander unblacklisted successfully", user });
+
+    if (user.role !== "errander") {
+      return res.status(400).json({
+        status: false,
+        message: "User is not an errander",
+        data: null,
+      });
+    }
+
+    const profile = await Profile.findOne({ userId: req.params.id });
+    if (!profile) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found for this user",
+        data: null,
+      });
+    }
+
+    if (!profile.isBlacklisted) {
+      return res.status(400).json({
+        status: false,
+        message: "Errander is not blacklisted",
+        data: null,
+      });
+    }
+
+    profile.isBlacklisted = false;
+    await profile.save();
+
+    const updatedProfile = await Profile.findOne({ userId: req.params.id }).populate('userId');
+
+    res.status(200).json({
+      status: true,
+      message: "Errander unblacklisted successfully",
+      data: updatedProfile,
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Error unblacklisting errander:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
 });
 
-
-
+// Feature an errander
 userRoute.put("/feature-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+        data: null,
+      });
     }
-    await user.featureErrander();
-    res.status(200).json({ message: "Errander featured successfully", user });
+
+    if (user.role !== "errander") {
+      return res.status(400).json({
+        status: false,
+        message: "User is not an errander",
+        data: null,
+      });
+    }
+
+    const profile = await Profile.findOne({ userId: req.params.id });
+    if (!profile) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found for this user",
+        data: null,
+      });
+    }
+
+    if (profile.isFeatured) {
+      return res.status(400).json({
+        status: false,
+        message: "Errander is already featured",
+        data: null,
+      });
+    }
+
+    profile.isFeatured = true;
+    await profile.save();
+
+    const updatedProfile = await Profile.findOne({ userId: req.params.id }).populate('userId');
+
+    res.status(200).json({
+      status: true,
+      message: "Errander featured successfully",
+      data: updatedProfile,
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Error featuring errander:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
 });
 
-
+// Unfeature an errander
 userRoute.put("/unfeature-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+        data: null,
+      });
     }
-    await user.unfeatureErrander();
-    res.status(200).json({ message: "Errander unfeatured successfully", user });
+
+    if (user.role !== "errander") {
+      return res.status(400).json({
+        status: false,
+        message: "User is not an errander",
+        data: null,
+      });
+    }
+
+    const profile = await Profile.findOne({ userId: req.params.id });
+    if (!profile) {
+      return res.status(404).json({
+        status: false,
+        message: "Profile not found for this user",
+        data: null,
+      });
+    }
+
+    if (!profile.isFeatured) {
+      return res.status(400).json({
+        status: false,
+        message: "Errander is not featured",
+        data: null,
+      });
+    }
+
+    profile.isFeatured = false;
+    await profile.save();
+
+    const updatedProfile = await Profile.findOne({ userId: req.params.id }).populate('userId');
+
+    res.status(200).json({
+      status: true,
+      message: "Errander unfeatured successfully",
+      data: updatedProfile,
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Error unfeaturing errander:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
 });
 
-
-
+// Get featured erranders
 userRoute.get("/featured-erranders", async (req, res) => {
   try {
-    const featuredErranders = await User.find({
-      role: "errander",
+    const featuredErranders = await Profile.find({
       isFeatured: true,
-      isBlacklisted: false, 
-      verificationStatus: "verified", 
+      isBlacklisted: false,
+    })
+      .populate({
+        path: 'userId',
+        match: {
+          role: "errander",
+          verificationStatus: "verified",
+        },
+      })
+      .lean();
+
+    // Filter out profiles where userId didn't match the population criteria
+    const validErranders = featuredErranders.filter((profile) => profile.userId !== null);
+
+    res.status(200).json({
+      status: true,
+      message: "Featured erranders retrieved successfully",
+      data: validErranders,
     });
-    res.status(200).json(featuredErranders);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error fetching featured erranders:", error.stack);
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
   }
 });
+
+
 export default userRoute
