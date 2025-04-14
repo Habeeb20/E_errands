@@ -342,6 +342,70 @@ userRoute.get("/adminDashboard", verifyToken, isAdmin, async(req, res) => {
 })
 
 
+
+userRoute.get("/erranderdashboard", verifyToken, async(req, res) => {
+
+  try {
+    const user = await User.findById(req.user.id)
+    if(!user) {
+      console.log("user not found")
+      return res.status(404).json({
+        message: "user not found",
+        status: false
+
+      })
+    }
+
+    const profile = await Profile.findOne({userId:user._id}).populate("userId", "firstName lastName phone email role");
+    if(!profile){
+      console.log("profile not found")
+      return res.status(404).json({
+        message: "profile not found",
+        status: false
+    })
+  }
+
+  return res.status(200).json({
+    message:"profile available",
+    status: true,
+    profile
+  })
+
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({
+      status: false,
+      message: "an error occurred from the server"
+    })
+  }
+})
+
+
+
+userRoute.put('/profile', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const updatedProfile = req.body;
+
+    const profile = await Profile.findOneAndUpdate(
+      { userId },
+      updatedProfile,
+      { new: true }
+    );
+
+    if (!profile) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    res.json({ profile });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
 // Verify an errander
 userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
