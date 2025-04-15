@@ -8,10 +8,10 @@ import cloudinary from "cloudinary"
 const profileRoute = express.Router()
 
 profileRoute.post("/create",  async(req, res) => {
-    const {userEmail, address, age, gender, dateOfBirth, state, LGA, maritalStatus,   } = req.body
+    const {userEmail, address, age, gender, dateOfBirth, state, LGA, maritalStatus, phoneNumber  } = req.body
 
     try {
-        if(!userEmail ||!address || !age || !gender || !dateOfBirth || !state || !LGA || !maritalStatus){
+        if(!userEmail ||!address || !age || !gender || !dateOfBirth || !state || !LGA || !maritalStatus || !phoneNumber ){
             return res.status(400).json({
                 status: false,
                 message : "all required fields are meant to be filled"
@@ -35,7 +35,8 @@ profileRoute.post("/create",  async(req, res) => {
             state,
             LGA, 
             address,
-            gender
+            gender,
+            phoneNumber 
         })
 
       await profileData.save()
