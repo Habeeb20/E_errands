@@ -8,6 +8,7 @@ import morgan from "morgan";
 import multer from "multer";
 import userRoute from "./routes/userRoute.js";
 import profileRoute from "./routes/profileRoute.js";
+import errandRoute from "./routes/errand.Route.js";
 dotenv.config();
 connectDb();
 
@@ -33,6 +34,7 @@ app.use(morgan("dev"));
 
 app.use("/api/auth", userRoute)
 app.use("/api/profile", profileRoute)
+app.use("/api/errand", errandRoute)
 
 
 app.get("/", (req, res) => {
