@@ -9,12 +9,43 @@ import multer from "multer";
 import userRoute from "./routes/userRoute.js";
 import profileRoute from "./routes/profileRoute.js";
 import errandRoute from "./routes/errand.Route.js";
+import http from 'http';
+import { Server } from 'socket.io';
 dotenv.config();
 connectDb();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', 
+    methods: ['GET', 'POST'],
+  },
+});
 
 app.set("timeout", 60000);
+
+
+
+// Socket.IO Connection
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  socket.on('join', (userId) => {
+    socket.join(userId); // User joins a room with their ID
+    console.log(`${userId} joined room`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 
 const port = process.env.PORT || 8080
 
@@ -41,6 +72,21 @@ app.get("/", (req, res) => {
     res.send("app is listening on port....")
   })
   
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`Your app is listening on port ${port}`)
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
