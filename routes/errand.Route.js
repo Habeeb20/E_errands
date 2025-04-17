@@ -97,9 +97,9 @@ errandRoute.post('/create', verifyToken, async (req, res) => {
     // Create the errand
     const errand = new Errand({
       clientId, // From authenticated user
-      erranderId, // From errander's profile
-      client: clientProfile._id, // Client's profile ID
-      errander: erranderProfile._id, // Errander's profile ID
+      erranderId:erranderProfile._id, 
+      client: clientProfile._id, 
+      errander: erranderProfileId, 
       pickupAddress,
       destinationAddress,
       packageDescription,
@@ -114,7 +114,7 @@ errandRoute.post('/create', verifyToken, async (req, res) => {
     // Notify the errander
     const notification = new Notification({
       userId: erranderId,
-      message: `You have a new errand request from ${clientId}`,
+      message: `You have a new errand request from ${clientId.firstName}`,
       errandId: errand._id,
     });
     await notification.save();
@@ -316,10 +316,21 @@ errandRoute.post('/:id/cancel', verifyToken, async (req, res) => {
 // Get Errand History for a User (Client or Errander)
 errandRoute.get('/history', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id; // Get userId from authenticated user
+    const userId = req.user.id;
 
-    const errandsAsClient = await Errand.find({ clientId: userId }).populate('errander client');
-    const errandsAsErrander = await Errand.find({ erranderId: userId }).populate('errander client');
+   
+    const errandsAsClient = await Errand.find({ clientId: userId })
+      .populate('clientId', 'firstName lastName email phone uniqueNumber') // Populate client details
+      .populate('client', 'profilePicture') // Populate client profile picture
+      .populate('erranderId', 'firstName lastName email phone uniqueNumber') // Populate errander details
+      .populate('errander', 'profilePicture'); // Populate errander profile picture
+
+    const errandsAsErrander = await Errand.find({ erranderId: userId })
+      .populate('clientId', 'firstName lastName email phone uniqueNumber') // Populate client details
+      .populate('client', 'profilePicture') // Populate client profile picture
+      .populate('erranderId', 'firstName lastName email phone uniqueNumber') // Populate errander details
+      .populate('errander', 'profilePicture'); // Populate errander profile picture
+
     const history = [...errandsAsClient, ...errandsAsErrander];
 
     res.status(200).json({ status: true, history });
@@ -331,13 +342,18 @@ errandRoute.get('/history', verifyToken, async (req, res) => {
 // Get Notifications for a User
 errandRoute.get('/notifications', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id; // Get userId from authenticated user
+    const id = req.user.id; // Get userId from authenticated user
 
-    const notifications = await Notification.find({ userId }).sort({ createdAt: -1 });
+    const notificationsErrander = await Notification.find({ erranderId: id }).populate("erranderId", 'firstName lastName email phone uniqueNumber').sort({ createdAt: -1 });
+    const notificationsClient = await Notification.find({ userId: id }).populate("userId", 'firstName lastName email phone uniqueNumber').sort({ createdAt: -1 });
+
+    const notifications = [...notificationsClient, ...notificationsErrander]
     res.status(200).json({ status: true, notifications });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
 });
+
+
 
 export default errandRoute;
