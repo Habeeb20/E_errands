@@ -36,6 +36,23 @@ io.on('connection', (socket) => {
     console.log(`${userId} joined room`);
   });
 
+
+   // Handle location updates from the errander
+   socket.on('updateLocation', ({ userId, errandId, position }) => {
+    // Find the errand to get the client ID
+    Errand.findById(errandId)
+      .then((errand) => {
+        if (errand && errand.status === 'in_progress') {
+          // Emit to both errander and client
+          io.to(userId).emit('erranderLocation', { errandId, position });
+          io.to(errand.clientId.toString()).emit('erranderLocation', { errandId, position });
+        }
+      })
+      .catch((error) => {
+        console.error('Error broadcasting location:', error);
+      });
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
