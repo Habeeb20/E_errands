@@ -90,13 +90,25 @@ comments: [
   clicks: { type: Number, default: 0 }, 
   shares: { type: Number, default: 0 },
 
+  jobsCanDo: {
+    type: [String], 
+    default: []
+},
+jobsCannotDo: {
+    type: [String], 
+    default: []
+}
   
 
 }, {timestamps: true})
+
 profileSchema.pre("save", function(next){
     if(!this.slug){
         this.slug=slugify(this.userEmail, { lower: true, strict: true })
     }
+    this.jobsCannotDo = this.jobsCannotDo.filter(job => !this.jobsCanDo.includes(job));
+    this.jobsCanDo = this.jobsCanDo.filter(job => !this.jobsCannotDo.includes(job));
+    
     next()
 })
 

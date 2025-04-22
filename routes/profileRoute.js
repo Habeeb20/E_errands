@@ -113,29 +113,103 @@ profileRoute.get("/getprofile", verifyToken, async (req, res) => {
   });
 
 
-profileRoute.put("/update", verifyToken, async(req, res) => {
-  const  {userId,  phone, address,  WDYD, profilePicture} = req.body
-
-    try {
-        const user = await User.findByIdAndUpdate(
-            userId,
-            {phone,  profilePicture},
-            {new: true}
-        )
-
-        const profile = await Profile.findOneAndUpdate(
-            {userId},
-            {address, WDYD},
-            {new: true}
-        ).populate("userId", "firstName lastName email")
-        return res.status(200).json({
-            status: true,
-            date: profile
-        })
-    } catch (error) {
-        res.status(500).json({status: false, message: "an error occurred in the server"})
+ profileRoute.put("/update", verifyToken, async (req, res) => {
+    const { userId, phone, address, WDYD, profilePicture, jobsCanDo, jobsCannotDo } = req.body;
+  
+    // Step 1: Validate input
+    if (!userId) {
+      return res.status(400).json({ status: false, message: "userId is required" });
     }
-})
+  
+    // Step 2: Verify the userId matches the authenticated user
+    if (req.user.id !== userId) { // Assuming verifyToken sets req.user
+      return res.status(403).json({ status: false, message: "Unauthorized: You can only update your own profile" });
+    }
+  
+    // Step 3: Validate optional fields (if provided, ensure they are of correct type)
+    if (phone && typeof phone !== "string") {
+      return res.status(400).json({ status: false, message: "phone must be a string" });
+    }
+    if (address && typeof address !== "string") {
+      return res.status(400).json({ status: false, message: "address must be a string" });
+    }
+    if (WDYD && typeof WDYD !== "string") {
+      return res.status(400).json({ status: false, message: "WDYD must be a string" });
+    }
+    if (profilePicture && typeof profilePicture !== "string") {
+      return res.status(400).json({ status: false, message: "profilePicture must be a string" });
+    }
+    if (jobsCanDo && !Array.isArray(jobsCanDo)) {
+      return res.status(400).json({ status: false, message: "jobsCanDo must be an array" });
+    }
+    if (jobsCannotDo && !Array.isArray(jobsCannotDo)) {
+      return res.status(400).json({ status: false, message: "jobsCannotDo must be an array" });
+    }
+  
+    try {
+      // Step 4: Prepare updates for User and Profile
+      const userUpdates = {};
+      if (phone) userUpdates.phone = phone;
+      if (profilePicture) userUpdates.profilePicture = profilePicture;
+  
+      const profileUpdates = {};
+      if (address) profileUpdates.address = address;
+      if (WDYD) profileUpdates.WDYD = WDYD;
+      if (jobsCanDo) profileUpdates.jobsCanDo = jobsCanDo;
+      if (jobsCannotDo) profileUpdates.jobsCannotDo = jobsCannotDo;
+  
+      // Step 5: Update User (if there are updates)
+      let user;
+      if (Object.keys(userUpdates).length > 0) {
+        user = await User.findByIdAndUpdate(
+          userId,
+          userUpdates,
+          { new: true }
+        );
+        if (!user) {
+          return res.status(404).json({ status: false, message: "User not found" });
+        }
+      }
+  
+      // Step 6: Update Profile (if there are updates)
+      let profile;
+      if (Object.keys(profileUpdates).length > 0) {
+        profile = await Profile.findOneAndUpdate(
+          { userId },
+          profileUpdates,
+          { new: true }
+        ).populate("userId", "firstName lastName email");
+        if (!profile) {
+          return res.status(404).json({ status: false, message: "Profile not found" });
+        }
+      }
+  
+      // Step 7: If no updates were provided, fetch the current profile
+      if (!profile && Object.keys(userUpdates).length === 0) {
+        profile = await Profile.findOne({ userId }).populate("userId", "firstName lastName email");
+        if (!profile) {
+          return res.status(404).json({ status: false, message: "Profile not found" });
+        }
+      }
+  
+      return res.status(200).json({
+        status: true,
+        data: profile // Fixed typo from "date" to "data"
+      });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ 
+        status: false, 
+        message: "An error occurred while updating the profile", 
+        error: error.message 
+      });
+    }
+  });
+  
+
+
+
+
 
 
 //upload ur picture

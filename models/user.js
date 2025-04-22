@@ -49,11 +49,13 @@ const userSchema = new mongoose.Schema({
     unique: true,
   },
 
+
+
   verificationStatus: {
     type: String,
     enum: ["unverified", "verified"],
     default: function () {
-      return this.role === "errander" ? "unverified" : "verified"; 
+      return this.role === "errander" || this.role === "messenger" ? "unverified" : "verified";
     },
   },
   isBlacklisted: {

@@ -196,12 +196,16 @@ userRoute.post("/login", async(req, res) => {
       let roleMessage = "";
       switch (user.role) {
         case "errander":
-          roleMessage = "Welcome,  You have full access to the system as errander account.";
+          roleMessage = "Welcome,  You have full access to the system for your errander account.";
           break;
 
         case "admin":
           roleMessage = "welcome, you have full access to all th activities";
           break;
+
+          case "messenger":
+            roleMessage = "welcome, you have full access to your messenger account";
+            break;
       
         case "user":
         default:
@@ -466,41 +470,83 @@ userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => 
     });
   }
 });
+
+
+
+// userRoute.get("/erranders", async (req, res) => {
+//   try {
+//     const users = await User.find({ role: { $in: ["errander", "messenger"] } });
+
+//     if (users.length === 0) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "No erranders found",
+//         data: null,
+//       });
+//     }
+
+//     const userIds = users.map(user => user._id);
+//     const profiles = await Profile.find({ userId: { $in: userIds } })
+//         .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber');
+
+//     if (profiles.length === 0) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "No profiles found",
+//         data: null,
+//       });
+//     }
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Erranders retrieved successfully",
+//       data: profiles,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching erranders:", error.stack);
+//     res.status(500).json({
+//       status: false,
+//       message: process.env.NODE_ENV === "production" ? "Internal server error" : error.message,
+//       data: null,
+//     });
+//   }
+// });
+
+
+
+
+
 userRoute.get("/erranders", async (req, res) => {
   try {
-    const users = await User.find({ role: "errander" });
+    // Fetch profiles where the user's role is "errander" or "messenger"
+    const profiles = await Profile.find()
+      .populate({
+        path: "userId",
+        match: { role: { $in: ["errander", "messenger"] }, isBlacklisted: { $ne: true } }, // Exclude blacklisted users
+        select: "firstName lastName phone email role verificationStatus uniqueNumber",
+      })
+      .select("slug profilePicture age gender LGA state comments") // Select only needed fields
+      .lean();
 
-    if (users.length === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "No erranders found",
-        data: null,
-      });
-    }
+    // Filter out profiles where userId didn't match the role or was blacklisted (i.e., userId is null after populate)
+    const filteredProfiles = profiles.filter((profile) => profile.userId);
 
-    const userIds = users.map(user => user._id);
-    const profiles = await Profile.find({ userId: { $in: userIds } })
-        .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber');
-
-    if (profiles.length === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "No profiles found",
-        data: null,
-      });
-    }
+    // Add commentCount to each profile
+    const profilesWithCommentCount = filteredProfiles.map((profile) => ({
+      ...profile,
+      commentCount: profile.comments ? profile.comments.length : 0,
+    }));
 
     res.status(200).json({
       status: true,
-      message: "Erranders retrieved successfully",
-      data: profiles,
+      message: profilesWithCommentCount.length > 0 ? "Erranders retrieved successfully" : "No erranders found",
+      data: profilesWithCommentCount,
     });
   } catch (error) {
     console.error("Error fetching erranders:", error.stack);
     res.status(500).json({
       status: false,
       message: process.env.NODE_ENV === "production" ? "Internal server error" : error.message,
-      data: null,
     });
   }
 });
@@ -508,7 +554,9 @@ userRoute.get("/erranders", async (req, res) => {
 
 
 
-// Blacklist an errander
+
+
+
 userRoute.put("/blacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     // Find the user by ID
