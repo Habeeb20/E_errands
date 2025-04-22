@@ -106,6 +106,68 @@ app.get("/", (req, res) => {
 
 
 // Geocode address using Nominatim (OpenStreetMap)
+// app.post("/api/geocode", async (req, res) => {
+//   const { address } = req.body;
+
+//   if (!address) {
+//     return res.status(400).json({
+//       status: false,
+//       message: "Address is required",
+//     });
+//   }
+
+//   try {
+//     const response = await axios.get(
+//       `https://nominatim.openstreetmap.org/search`,
+//       {
+//         params: {
+//           q: address,
+//           format: "json",
+//           limit: 1,
+//         },
+//         headers: {
+//           "User-Agent": "YourAppName/1.0 (your-email@example.com)", // Nominatim requires a user agent
+//         },
+//       }
+//     );
+
+//     const data = response.data;
+//     if (data.length === 0) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Address not found",
+//       });
+//     }
+
+//     const { lat, lon } = data[0];
+//     res.status(200).json({
+//       status: true,
+//       data: {
+//         lat: parseFloat(lat),
+//         lng: parseFloat(lon),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Geocoding error:", error.message);
+//     res.status(500).json({
+//       status: false,
+//       message: "Failed to geocode address",
+//       error: error.message,
+//     });
+//   }
+// });
+
+
+
+
+
+
+
+
+
+
+
+
 app.post("/api/geocode", async (req, res) => {
   const { address } = req.body;
 
@@ -126,7 +188,7 @@ app.post("/api/geocode", async (req, res) => {
           limit: 1,
         },
         headers: {
-          "User-Agent": "YourAppName/1.0 (your-email@example.com)", // Nominatim requires a user agent
+          "User-Agent": "YourAppName/1.0 (your-email@example.com)", // Replace with your email
         },
       }
     );
@@ -157,10 +219,122 @@ app.post("/api/geocode", async (req, res) => {
   }
 });
 
+// Socket.IO connection handling
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`);
+
+  // Join a ride-specific room
+  socket.on("joinRide", (rideId) => {
+    socket.join(rideId);
+    console.log(`User ${socket.id} joined ride ${rideId}`);
+  });
+
+  // Receive location updates from the driver
+  socket.on("updateLocation", ({ rideId, position }) => {
+    console.log(`Location update for ride ${rideId}:`, position);
+    // Broadcast the location to all clients in the ride room
+    io.to(rideId).emit("locationUpdate", position);
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`User disconnected: ${socket.id}`);
+  });
+});
 
 
+// Fetch multiple routes using OSRM
+app.post("/api/get-routes", async (req, res) => {
+  const { start, end } = req.body;
 
+  // Validate request body
+  if (!start || !end || !start.lat || !start.lng || !end.lat || !end.lng) {
+    return res.status(400).json({
+      status: false,
+      message: "Start and end coordinates are required",
+    });
+  }
 
+  try {
+    // Request routes from OSRM (public instance)
+    const response = await axios.get(
+      `http://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}`,
+      {
+        params: {
+          alternatives: 2, // Request up to 2 alternative routes
+          steps: true,
+          geometries: "polyline",
+          overview: "full",
+        },
+      }
+    );
+
+    // Check if routes were found
+    if (!response.data.routes || response.data.routes.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No routes found between the given coordinates",
+      });
+    }
+
+    // Process each route
+    const routes = response.data.routes.map((route) => {
+      // Decode polyline to get coordinates
+      const coordinates = decodePolyline(route.geometry);
+      return {
+        distance: route.distance / 1000, // Convert meters to kilometers
+        duration: route.duration / 60, // Convert seconds to minutes
+        path: coordinates.map((coord) => [coord.lat, coord.lng]), // Convert to [lat, lng] for Leaflet
+      };
+    });
+
+    res.status(200).json({
+      status: true,
+      data: routes,
+    });
+  } catch (error) {
+    console.error("Routing error:", error.message);
+    res.status(500).json({
+      status: false,
+      message: "Failed to fetch routes",
+      error: error.message,
+    });
+  }
+});
+
+// Simple polyline decoding function for OSRM
+function decodePolyline(encoded) {
+  let points = [];
+  let index = 0,
+    len = encoded.length;
+  let lat = 0,
+    lng = 0;
+
+  while (index < len) {
+    let b,
+      shift = 0,
+      result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    let dlat = (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    let dlng = (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
+}
 
 
 
@@ -195,13 +369,6 @@ app.post("/api/geocode", async (req, res) => {
 server.listen(port, () => {
     console.log(`Your app is listening on port ${port}`)
 })
-
-
-
-
-
-
-
 
 
 
