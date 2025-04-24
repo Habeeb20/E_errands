@@ -518,7 +518,7 @@ userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => 
 
 userRoute.get("/erranders", async (req, res) => {
   try {
-    // Fetch profiles where the user's role is "errander" or "messenger"
+  
     const profiles = await Profile.find()
       .populate({
         path: "userId",

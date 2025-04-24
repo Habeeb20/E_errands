@@ -312,6 +312,7 @@ errandRoute.post('/:id/accept', verifyToken, async (req, res) => {
 
     // Notify the client
     const notification = new Notification({
+      
       erranderId: errand.clientId._id,
       message: `Your errand has been accepted by ${errand.erranderId.firstName} ${errand.erranderId.lastName}`,
       errandId: errand._id,
@@ -381,9 +382,13 @@ errandRoute.post('/:id/start', verifyToken, async (req, res) => {
     if (errand.erranderId._id.toString() !== erranderId) {
       return res.status(403).json({ status: false, message: 'Unauthorized' });
     }
+    if(errand.status === "in_progress"){
+      return res.status(400).json({status: false, message: "errand is already in progress"})
+    }
     if (errand.status !== 'accepted') {
       return res.status(400).json({ status: false, message: 'Errand cannot be started' });
     }
+    
 
     errand.status = 'in_progress';
     await errand.save();

@@ -392,10 +392,11 @@ profileRoute.get("/get-clicks", async(req, res) => {
 
 profileRoute.get("/aprofile/:slug", async(req, res) => {
   try {
-    const {slug} = req.params.slug;
+    const slug = req.params.slug;
 
-    const profile = await Profile.findOne(slug)
-        .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber');
+    const profile = await Profile.findOne({slug})
+        .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber')
+        .lean()
 
     if(!profile){
       console.log("profile not found")
@@ -403,7 +404,7 @@ profileRoute.get("/aprofile/:slug", async(req, res) => {
         message: "profile not found"
       })
     }
-
+    console.log(`Profile found for slug: ${slug}`, profile);
     return res.status(200).json({
       message: "profile is available",
       profile
@@ -414,6 +415,32 @@ profileRoute.get("/aprofile/:slug", async(req, res) => {
     res.status(500).json({ success: false, message: "Something went wrong" });
   }
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 profileRoute.post("/:slug/comments", async (req, res) => {

@@ -166,6 +166,27 @@ app.get("/", (req, res) => {
 
 
 
+// Socket.IO connection handling
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`);
+
+  // Join a ride-specific room
+  socket.on("joinRide", (rideId) => {
+    socket.join(rideId);
+    console.log(`User ${socket.id} joined ride ${rideId}`);
+  });
+
+  // Receive location updates from the driver
+  socket.on("updateLocation", ({ rideId, position }) => {
+    console.log(`Location update for ride ${rideId}:`, position);
+    // Broadcast the location to all clients in the ride room
+    io.to(rideId).emit("locationUpdate", position);
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`User disconnected: ${socket.id}`);
+  });
+});
 
 
 app.post("/api/geocode", async (req, res) => {
@@ -219,27 +240,6 @@ app.post("/api/geocode", async (req, res) => {
   }
 });
 
-// Socket.IO connection handling
-io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.id}`);
-
-  // Join a ride-specific room
-  socket.on("joinRide", (rideId) => {
-    socket.join(rideId);
-    console.log(`User ${socket.id} joined ride ${rideId}`);
-  });
-
-  // Receive location updates from the driver
-  socket.on("updateLocation", ({ rideId, position }) => {
-    console.log(`Location update for ride ${rideId}:`, position);
-    // Broadcast the location to all clients in the ride room
-    io.to(rideId).emit("locationUpdate", position);
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
-  });
-});
 
 
 // Fetch multiple routes using OSRM
