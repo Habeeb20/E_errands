@@ -510,6 +510,40 @@ errandRoute.get('/history', verifyToken, async (req, res) => {
   }
 });
 
+
+//get total earnings
+errandRoute.get('/total-earnings', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Find all completed errands where the user is the errander
+    const completedErrands = await Errand.find({
+      erranderId: userId,
+      status: 'completed',
+    });
+
+    // Calculate the total earnings
+    const totalEarnings = completedErrands.reduce((sum, errand) => {
+      return sum + (errand.calculatedPrice || 0); // Use calculatedPrice, fallback to 0 if undefined
+    }, 0);
+
+    // Calculate 10% of total earnings
+    const platformFee = totalEarnings * 0.1;
+
+    res.status(200).json({
+      status: true,
+      totalEarnings,
+      platformFee, // 10% of totalEarnings
+      currency: 'NGN',
+      completedErrandsCount: completedErrands.length,
+    });
+  } catch (error) {
+    console.error('Error calculating total earnings:', error);
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+
 // Get Notifications for a User
 errandRoute.get('/notifications', verifyToken, async (req, res) => {
   try {
