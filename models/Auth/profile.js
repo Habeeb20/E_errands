@@ -37,7 +37,7 @@ const profileSchema = new mongoose.Schema({
     }, 
     phoneNumber:{
         type:String,
-        required: true
+        // required: true
     },
     address: {
         type:String,

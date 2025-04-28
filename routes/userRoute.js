@@ -11,7 +11,7 @@ import Profile from "../models/Auth/profile.js";
 import multer from "multer";
 import bcryptjs from "bcrypt"
 import { verifyToken } from "../middleware/verifyToken.js";
-
+import Errand from "../models/errand/errandSchema.js";
 
 
 const isAdmin = (req, res, next) => {
@@ -473,74 +473,101 @@ userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => 
 
 
 
+
+
+
+
 // userRoute.get("/erranders", async (req, res) => {
 //   try {
-//     const users = await User.find({ role: { $in: ["errander", "messenger"] } });
+  
+//     const profiles = await Profile.find()
+//       .populate({
+//         path: "userId",
+//         match: { role: { $in: ["errander", "messenger"] }, isBlacklisted: { $ne: true } }, // Exclude blacklisted users
+//         select: "firstName lastName phone email role verificationStatus uniqueNumber",
+//       })
+//       .select("slug profilePicture age gender LGA state comments") // Select only needed fields
+//       .lean();
 
-//     if (users.length === 0) {
-//       return res.status(404).json({
-//         status: false,
-//         message: "No erranders found",
-//         data: null,
-//       });
-//     }
+//     // Filter out profiles where userId didn't match the role or was blacklisted (i.e., userId is null after populate)
+//     const filteredProfiles = profiles.filter((profile) => profile.userId);
 
-//     const userIds = users.map(user => user._id);
-//     const profiles = await Profile.find({ userId: { $in: userIds } })
-//         .populate("userId", 'firstName lastName phone email role isBlacklisted verificationStatus uniqueNumber');
-
-//     if (profiles.length === 0) {
-//       return res.status(404).json({
-//         status: false,
-//         message: "No profiles found",
-//         data: null,
-//       });
-//     }
+//     // Add commentCount to each profile
+//     const profilesWithCommentCount = filteredProfiles.map((profile) => ({
+//       ...profile,
+//       commentCount: profile.comments ? profile.comments.length : 0,
+//     }));
 
 //     res.status(200).json({
 //       status: true,
-//       message: "Erranders retrieved successfully",
-//       data: profiles,
+//       message: profilesWithCommentCount.length > 0 ? "Erranders retrieved successfully" : "No erranders found",
+//       data: profilesWithCommentCount,
 //     });
 //   } catch (error) {
 //     console.error("Error fetching erranders:", error.stack);
 //     res.status(500).json({
 //       status: false,
 //       message: process.env.NODE_ENV === "production" ? "Internal server error" : error.message,
-//       data: null,
 //     });
 //   }
 // });
 
 
 
-
-
 userRoute.get("/erranders", async (req, res) => {
   try {
-  
+    // Fetch profiles with populated userId, filtering for errander/messenger roles and non-blacklisted users
     const profiles = await Profile.find()
       .populate({
         path: "userId",
-        match: { role: { $in: ["errander", "messenger"] }, isBlacklisted: { $ne: true } }, // Exclude blacklisted users
+        match: { role: { $in: ["errander", "messenger"] }, isBlacklisted: { $ne: true } },
         select: "firstName lastName phone email role verificationStatus uniqueNumber",
       })
-      .select("slug profilePicture age gender LGA state comments") // Select only needed fields
+      .select("slug profilePicture age gender LGA state comments")
       .lean();
 
-    // Filter out profiles where userId didn't match the role or was blacklisted (i.e., userId is null after populate)
+    // Filter out profiles where userId didn't match the role or was blacklisted
     const filteredProfiles = profiles.filter((profile) => profile.userId);
 
-    // Add commentCount to each profile
-    const profilesWithCommentCount = filteredProfiles.map((profile) => ({
-      ...profile,
-      commentCount: profile.comments ? profile.comments.length : 0,
-    }));
+    // Fetch errand statistics for each profile
+    const profilesWithStats = await Promise.all(
+      filteredProfiles.map(async (profile) => {
+        const userId = profile.userId?._id;
+
+        // Query errands for this errander
+        const errands = await Errand.find({ erranderId: userId })
+          .select("status calculatedPrice")
+          .lean();
+
+        // Calculate statistics
+        const completedErrandsCount = errands.filter(
+          (errand) => errand.status === "completed"
+        ).length;
+        const canceledErrandsCount = errands.filter(
+          (errand) => errand.status === "cancelled"
+        ).length;
+        const totalIncome = errands
+          .filter((errand) => errand.status === "completed")
+          .reduce((sum, errand) => sum + (errand.calculatedPrice || 0), 0);
+        const platformFee = totalIncome * 0.1; // 10% of total income
+        const incomeAfterFee = totalIncome - platformFee; // Income after deducting 10%
+
+        return {
+          ...profile,
+          commentCount: profile.comments ? profile.comments.length : 0,
+          completedErrandsCount,
+          canceledErrandsCount,
+          totalIncome,
+          platformFee,
+          incomeAfterFee,
+        };
+      })
+    );
 
     res.status(200).json({
       status: true,
-      message: profilesWithCommentCount.length > 0 ? "Erranders retrieved successfully" : "No erranders found",
-      data: profilesWithCommentCount,
+      message: profilesWithStats.length > 0 ? "Erranders retrieved successfully" : "No erranders found",
+      data: profilesWithStats,
     });
   } catch (error) {
     console.error("Error fetching erranders:", error.stack);
@@ -550,9 +577,6 @@ userRoute.get("/erranders", async (req, res) => {
     });
   }
 });
-
-
-
 
 
 
@@ -688,10 +712,10 @@ userRoute.put("/feature-errander/:id", verifyToken, isAdmin, async (req, res) =>
       });
     }
 
-    if (user.role !== "errander") {
+    if (user.role !== "errander" || user.role !== "messenger") {
       return res.status(400).json({
         status: false,
-        message: "User is not an errander",
+        message: "User is neither an errander not a messenger",
         data: null,
       });
     }
