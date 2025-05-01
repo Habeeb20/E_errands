@@ -77,16 +77,16 @@ userSchema.pre("save", function (next) {
 });
 
 userSchema.methods.verifyErrander = function () {
-  if (this.role !== "errander") {
-    throw new Error("Only erranders can be verified");
+  if (this.role !== "errander" || this.role !== "messenger") {
+    throw new Error("Only erranders  or messengers can be verified");
   }
   this.verificationStatus = "verified";
   return this.save();
 };
 
 userSchema.methods.blacklistErrander = function () {
-  if (this.role !== "errander") {
-    throw new Error("Only erranders can be blacklisted");
+  if (this.role !== "errander" || this.role !== "messenger") {
+    throw new Error("Only erranders or messengers can be blacklisted");
   }
   this.isBlacklisted = true;
   return this.save();
@@ -94,8 +94,8 @@ userSchema.methods.blacklistErrander = function () {
 
 
 userSchema.methods.unblacklistErrander = function () {
-  if (this.role !== "errander") {
-    throw new Error("Only erranders can be unblacklisted");
+  if (this.role !== "errander" || this.role !== "messenger") {
+    throw new Error("Only erranders or messengers can be unblacklisted");
   }
   this.isBlacklisted = false;
   return this.save();
@@ -103,8 +103,8 @@ userSchema.methods.unblacklistErrander = function () {
 
 
 userSchema.methods.featureErrander = function () {
-  if (this.role !== "errander") {
-    throw new Error("Only erranders can be featured");
+  if (this.role !== "errander" || this.role !== "messenger") {
+    throw new Error("Only erranders or messengers can be blacklisted");
   }
   this.isFeatured = true;
   return this.save();

@@ -425,7 +425,7 @@ userRoute.put("/verify-errander/:id", verifyToken, isAdmin, async (req, res) => 
     }
 
     // Check if the user is an errander
-    if (user.role !== "errander") {
+    if (user.role !== "errander" || user.role !== "messenger") {
       return res.status(400).json({
         status: false,
         message: "User is not an errander",

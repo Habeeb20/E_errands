@@ -12,6 +12,9 @@ import errandRoute from "./routes/errand.Route.js";
 import http from 'http';
 import { Server } from 'socket.io';
 import axios from "axios"
+import cloudinary from "cloudinary"
+import messageRouter from "./routes/messageRoute.js";
+import Message from "./models/messenger/message.js";
 dotenv.config();
 connectDb();
 
@@ -37,22 +40,75 @@ io.on('connection', (socket) => {
     console.log(`${userId} joined room`);
   });
 
+  socket.on('joinUserRoom', (userId) => {
+    socket.join(userId);
+});
 
-   // Handle location updates from the errander
-  //  socket.on('updateLocation', ({ userId, errandId, position }) => {
-  //   // Find the errand to get the client ID
-  //   Errand.findById(errandId)
-  //     .then((errand) => {
-  //       if (errand && errand.status === 'in_progress') {
-  //         // Emit to both errander and client
-  //         io.to(userId).emit('erranderLocation', { errandId, position });
-  //         io.to(errand.clientId.toString()).emit('erranderLocation', { errandId, position });
-  //       }
-  //     })
-  //     .catch((error) => {
-  //       console.error('Error broadcasting location:', error);
-  //     });
-  // });
+// Handle new request
+socket.on('newRequest', async (requestId) => {
+    const request = await Message.findById(requestId).populate('clientId ');
+    io.emit('requestPosted', request); // Notify all erranders
+});
+
+// Handle bid submission
+socket.on('submitBid', async ({ requestId, erranderId, price }) => {
+    const request = await Message.findById(requestId);
+    request.bids.push({ erranderId, erranderProfile: erranderId, price });
+    await request.save();
+    io.to(request.clientId.toString()).emit('newBid', request);
+    io.emit('requestUpdated', request);
+});
+
+// Handle client accepting a bid
+socket.on('acceptBid', async ({ requestId, bidId }) => {
+    const request = await Message.findById(requestId);
+    const bid = request.bids.id(bidId);
+    bid.status = 'accepted';
+    request.bids.forEach(b => {
+        if (b._id.toString() !== bidId) b.status = 'rejected';
+    });
+    request.erranderId = bid.erranderId;
+    request.errander = bid.erranderProfile;
+    request.status = 'accepted';
+    await request.save();
+    io.to(bid.erranderId.toString()).emit('bidAccepted', request);
+    io.to(request.clientId.toString()).emit('requestUpdated', request);
+    io.emit('requestUpdated', request);
+});
+
+// Handle chat messages
+socket.on('sendMessage', async ({ requestId, senderId, message }) => {
+    const request = await Message.findById(requestId);
+    request.chatMessages.push({ senderId, message });
+    await request.save();
+    io.to(request.clientId.toString()).emit('newMessage', request);
+    io.to(request.erranderId.toString()).emit('newMessage', request);
+});
+
+// Handle request status updates
+socket.on('updateRequestStatus', async ({ requestId, status }) => {
+    const request = await Message.findById(requestId);
+    request.status = status;
+    await request.save();
+    io.to(request.clientId.toString()).emit('requestUpdated', request);
+    io.to(request.erranderId.toString()).emit('requestUpdated', request);
+    io.emit('requestUpdated', request);
+});
+
+// Handle cancellation
+socket.on('cancelRequest', async ({ requestId, reason, cancelledBy }) => {
+    const request = await Message.findById(requestId);
+    request.status = 'cancelled';
+    request.cancellation = { reason, cancelledBy, cancelledAt: new Date() };
+    await request.save();
+    io.to(request.clientId.toString()).emit('requestUpdated', request);
+    if (request.erranderId) {
+        io.to(request.erranderId.toString()).emit('requestUpdated', request);
+    }
+    io.emit('requestUpdated', request);
+});
+
+
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
@@ -84,6 +140,7 @@ app.use(morgan("dev"));
 app.use("/api/auth", userRoute)
 app.use("/api/profile", profileRoute)
 app.use("/api/errand", errandRoute)
+app.use("/api/requests", messageRouter)
 
 
 app.get("/", (req, res) => {
@@ -343,25 +400,6 @@ function decodePolyline(encoded) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   
 
 
@@ -369,6 +407,14 @@ function decodePolyline(encoded) {
 server.listen(port, () => {
     console.log(`Your app is listening on port ${port}`)
 })
+
+
+
+export default io
+
+
+
+
 
 
 

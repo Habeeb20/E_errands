@@ -530,9 +530,12 @@ errandRoute.get('/total-earnings', verifyToken, async (req, res) => {
     // Calculate 10% of total earnings
     const platformFee = totalEarnings * 0.1;
 
+    const income = totalEarnings - platformFee
+
     res.status(200).json({
       status: true,
       totalEarnings,
+      income,
       platformFee, // 10% of totalEarnings
       currency: 'NGN',
       completedErrandsCount: completedErrands.length,
