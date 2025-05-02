@@ -580,6 +580,108 @@ userRoute.get("/erranders", async (req, res) => {
 
 
 
+//users
+userRoute.get("/allusers", async(req, res) => {
+  try {
+    const profile = await User.find({role: "user"})
+ 
+    return res.status(200).json(profile)
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      message:"profile not found",
+      status:(false)
+    })
+  }
+})
+
+
+
+userRoute.get('/allmessengers', async (req, res) => {
+
+  const { state } = req.query;
+  const query = state ? { state: { $regex: new RegExp(state, 'i') } } : {};
+
+  try {
+    const profiles = await Profile.find()
+      .populate({
+        path: 'userId',
+        match: { role: 'messenger', isBlacklisted: { $ne: true } },
+        select: 'firstName lastName phone email role verificationStatus uniqueNumber',
+      })
+      .select('_id slug profilePicture age gender lga state comments')
+      .lean();
+
+    const formattedProfiles = profiles
+      .filter((profile) => profile.userId)
+      .map((profile) => ({
+        _id: profile._id,
+        name: `${profile.userId.firstName} ${profile.userId.lastName}`.trim(),
+        role: `${profile.userId.role}`,
+        state: profile.state || 'N/A',
+        lga: profile.LGA || 'N/A',
+        email: profile.userId.email || 'N/A',
+        phone: profile.userId.phone || 'N/A',
+        profilePicture: profile.profilePicture || null,
+        age: profile.age || null,
+        gender: profile.gender || null,
+        slug: profile.slug || null,
+        verificationStatus: profile.userId.verificationStatus || null,
+        uniqueNumber: profile.userId.uniqueNumber || null,
+        comments: profile.comments || [],
+      }));
+
+    return res.status(200).json(formattedProfiles);
+  } catch (error) {
+    console.error('Error fetching profiles:', error);
+    res.status(500).json({
+      message: 'Failed to fetch profiles',
+      status: false,
+    });
+  }
+});
+
+
+
+
+
+userRoute.get("/allerranders", async(req, res) => {
+  try {
+    const profile = await User.find({role: "errander"})
+ 
+    return res.status(200).json(profile)
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      message:"profile not found",
+      status:(false)
+    })
+  }
+})
+
+
+
+userRoute.get('/allmessengersInState', async (req, res) => {
+  try {
+    const { state } = req.query;
+    const query = { role: "messenger" };
+    if (state) {
+      query.state =  { $regex: new RegExp(state, 'i') };;
+    }
+    const profiles = await Profile.find(query).populate('userId', 'firstName lastName  email role');
+    return res.status(200).json(profiles);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Failed to fetch profiles",
+      status: false,
+    });
+  }
+});
+
+
 
 userRoute.put("/blacklist-errander/:id", verifyToken, isAdmin, async (req, res) => {
   try {
@@ -753,6 +855,78 @@ userRoute.put("/feature-errander/:id", verifyToken, isAdmin, async (req, res) =>
       status: false,
       message: "Server error",
       error: process.env.NODE_ENV === "production" ? null : error.message,
+    });
+  }
+});
+
+
+userRoute.get('/messengers/stats', async (req, res) => {
+  try {
+    const stats = await Profile.aggregate([
+      // Join with User collection
+      {
+        $lookup: {
+          from: 'users', // The name of the User collection (lowercase, pluralized by Mongoose)
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'userId',
+        },
+      },
+      // Unwind the userId array (since $lookup returns an array)
+      { $unwind: '$userId' },
+      // Match only messengers who are not blacklisted
+      {
+        $match: {
+          'userId.role': 'messenger',
+          'userId.isBlacklisted': { $ne: true },
+        },
+      },
+      // Group by state and count
+      {
+        $group: {
+          _id: '$state',
+          count: { $sum: 1 },
+        },
+      },
+      // Project to rename _id to name
+      {
+        $project: {
+          name: '$_id',
+          count: 1,
+          _id: 0,
+        },
+      },
+      // Sort alphabetically by state name
+      { $sort: { name: 1 } },
+    ]);
+
+    // If no data, return a default response or handle as needed
+    if (!stats || stats.length === 0) {
+      return res.status(200).json([
+        { name: 'Lagos', count: 237 },
+        { name: 'Kaduna', count: 237 },
+        { name: 'Jos', count: 237 },
+        { name: 'Cross-River', count: 237 },
+        { name: 'Oyo', count: 237 },
+        { name: 'Ogun', count: 237 },
+        { name: 'Abia', count: 237 },
+        { name: 'Anambra', count: 237 },
+        { name: 'Ondo', count: 237 },
+        { name: 'Abuja', count: 237 },
+        { name: 'Zaria', count: 237 },
+        { name: 'Benue', count: 237 },
+        { name: 'Imo', count: 237 },
+        { name: 'Niger', count: 237 },
+        { name: 'Nasarawa', count: 237 },
+      ]);
+    }
+
+    return res.status(200).json(stats);
+  } catch (error) {
+    console.error('Error fetching messenger stats:', error);
+    res.status(500).json({
+      message: 'Failed to fetch messenger stats',
+      status: false,
     });
   }
 });

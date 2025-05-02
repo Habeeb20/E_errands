@@ -367,6 +367,9 @@ errandRoute.post('/:id/reject', verifyToken, async (req, res) => {
   }
 });
 
+
+
+
 // POST /api/errand/:id/start - Start an errand
 errandRoute.post('/:id/start', verifyToken, async (req, res) => {
   try {
@@ -510,6 +513,39 @@ errandRoute.get('/history', verifyToken, async (req, res) => {
   }
 });
 
+
+
+//get the total amount spent by a client 
+
+// Get Total Amount Spent by Client on Completed Errands
+errandRoute.get('/total-spent', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Fetch errands where the user is the client and status is completed
+    const completedErrands = await Errand.find({
+      clientId: userId,
+      status: 'completed',
+    })
+      .populate('clientId', 'firstName lastName email phone uniqueNumber')
+      .populate('client', 'profilePicture')
+      .populate('erranderId', 'firstName lastName email phone uniqueNumber')
+      .populate('errander', 'profilePicture');
+
+    // Calculate total amount spent (assuming 'price' field exists in Errand schema)
+    const totalSpent = completedErrands.reduce((sum, errand) => sum + (errand.calculatedPrice || 0), 0);
+    console.log(totalSpent, "total spent!!")
+    // Optionally return the completed errands alongside the total
+    res.status(200).json({
+      status: true,
+      totalSpent,
+      completedErrands,
+    });
+  } catch (error) {
+    console.error('Error fetching total spent:', error);
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
 
 //get total earnings
 errandRoute.get('/total-earnings', verifyToken, async (req, res) => {
